@@ -27,8 +27,8 @@ def clean(path):
 def main():
     files = os.listdir(basepath)
  
-    print(files)
-    return
+#    print(files)
+#    return
     for f in files:
         if f.startswith('.'):
             continue
