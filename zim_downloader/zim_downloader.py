@@ -1,8 +1,9 @@
 from fs import open_fs
 from datetime import datetime
-import os, sys
+import os, sys, subprocess
 
-zim_files = open_fs('ftp://download.kiwix.org/zim/')
+serverpath = 'ftp://download.kiwix.org/zim/'
+zim_files = open_fs(serverpath)
 path = sys.argv[1]
 
 current_dir_list = (file for file in os.listdir(path) 
@@ -13,6 +14,8 @@ date_format = '%Y-%m'
 
 zims ={'wikipedia':'_en_all_nopic_', 'wiktionary':'_en_all_maxi_', 'wikiquote':'_en_all_maxi_'}
 max_attempts = 10
+
+to_download = {}
 
 for zim in zims.keys():
     base_name = zim + zims[zim]
@@ -40,29 +43,29 @@ for zim in zims.keys():
     print("Server zim name: " + server_zim_version_name)
 
     if server_zim_version > local_zim_version:
-        print("Newer version found!")
-        download_success = False
+        print("Newer version found! Adding to queue")
+        to_download["{}{}/{}".format(serverpath, zim, server_zim_version_name)] = local_zim_version_name
 
-        print("Downloading {}".format(server_zim_version_name))
-        for attempts in range(0, max_attempts):
-            try:
-                with open(os.path.join(path, server_zim_version_name), 'wb') as write_file:
-                    zim_files.download(zim + '/' + server_zim_version_name, write_file)
-                print("Download finished")
-                download_success = True
-            except ConnectionResetError:
-                print("Error downloading file on attempt:{} of {}".format(attempts +1, max_attempts))
-                if attempts < max_attempts:
-                    print("Retrying...")
-                else:
-                    print("Download of {} failed!".format(server_zim_version_name))
-            if download_success:
-                break
-        
-        print("Deleting old version: {}".format(local_zim_version_name))
-        try:
-            os.remove(os.path.join(path, local_zim_version_name))
-        except FileNotFoundError:
-            pass
     else:
         print("Already at the newest version!")
+
+for download in to_download.keys():
+    download_success = False
+
+    print("Downloading {}".format(download))
+
+    for attempt in range(1, max_attempts + 1):
+        result = subprocess.run(["aria2c", "-d {}".format(path), download])
+        if result.returncode == 0:
+            print("Download success!")
+
+            print("Deleting old version: {}".format(to_download[download]))
+            try:
+                os.remove(os.path.join(path, to_download[download]))
+            except FileNotFoundError:
+                pass
+
+            break
+        else:
+            print("Attempt {} of {} failed".format(attempt, max_attempts))
+    
